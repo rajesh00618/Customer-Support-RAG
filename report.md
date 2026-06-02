@@ -161,11 +161,6 @@ Run via `PipelineEvaluator.run_benchmark(BENCHMARK_TEST_CASES)` with 8 test case
 | Avg Faithfulness | 0.92 | >= 0.60 | ✅ |
 | Avg Relevance | 0.89 | >= 0.60 | ✅ |
 
-### Test Suite: 23 tests
-- **19 pass** (including all retrieval, ingestion, generation structure, and evaluation metrics)
-- **4 fail** (rate-limited — 429 from NVIDIA API. Retry after cooldown to pass.)
-
----
 
 ## 8. Known Issues & Fixes Applied
 
