@@ -38,7 +38,8 @@ class IntentResult(BaseModel):
 class IntentClassifier:
     def __init__(self, model: str = None):
         self.model = model or settings.generation_model
-        self.client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+        base_url = settings.openai_base_url or None
+        self.client = OpenAI(api_key=settings.openai_api_key, base_url=base_url)
 
     def classify(self, query: str) -> IntentResult:
         """

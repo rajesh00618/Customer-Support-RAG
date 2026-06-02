@@ -17,7 +17,8 @@ class ResponseGenerator:
         self.model = model or settings.generation_model
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self.client = OpenAI(api_key=settings.openai_api_key, base_url=settings.openai_base_url)
+        base_url = settings.openai_base_url or None
+        self.client = OpenAI(api_key=settings.openai_api_key, base_url=base_url)
 
     def generate(self, messages: list[dict]) -> GeneratedResponse:
         """

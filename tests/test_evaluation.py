@@ -6,7 +6,6 @@ from evaluation.relevance import RelevanceEvaluator, RelevanceResult
 from evaluation.evaluator import PipelineEvaluator, EvaluationReport, BenchmarkReport
 from retrieval.vector_store import RetrievedChunk
 
-# High-priority benchmark test cases as specified in Phase 4.4
 BENCHMARK_TEST_CASES = [
     {
         "query": "How do I add a new member to my team?",
@@ -50,7 +49,6 @@ BENCHMARK_TEST_CASES = [
     }
 ]
 
-# Helper fixture for DB connection
 @pytest.fixture(scope="module")
 def conn():
     connection = psycopg2.connect(settings.database_url)
@@ -58,14 +56,12 @@ def conn():
     connection.rollback()
     connection.close()
 
-# Decorator to skip tests if no API key is provided
-openai_test = pytest.mark.skipif(
+openai_or_nvidia = pytest.mark.skipif(
     settings.openai_api_key in ("your-openai-api-key-here", "your-nvidia-api-key-here")
     or not (settings.openai_api_key.startswith("sk-") or settings.openai_api_key.startswith("nvapi-")),
-    reason="Requires a valid OpenAI/NVIDIA API key"
+    reason="Requires a valid OpenAI or NVIDIA API key"
 )
 
-# Seeding fixture: seeds all 10 documents if API key is active
 @pytest.fixture(scope="module", autouse=True)
 def seed_all_docs(conn):
     if settings.openai_api_key in ("your-openai-api-key-here", "your-nvidia-api-key-here") \
@@ -77,24 +73,20 @@ def seed_all_docs(conn):
     from ingestion.chunker import DocumentChunker
     from ingestion.embedder import Embedder
     
-    # 1. Clear database tables
     with conn.cursor() as cur:
         cur.execute("TRUNCATE intellisupport.feedback, intellisupport.responses, intellisupport.queries, intellisupport.chunks, intellisupport.documents CASCADE;")
         conn.commit()
         
-    # 2. Load and save documents
     docs = DocumentLoader.load_batch(SEED_DOCUMENTS)
     DocumentLoader.save_to_db(docs, conn)
     
-    # 3. Chunk documents
     chunker = DocumentChunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
     chunks = chunker.chunk_batch(docs)
     
-    # 4. Embed and store chunks
     embedder = Embedder()
     embedder.embed_and_store_chunks(chunks, conn)
 
-@openai_test
+@openai_or_nvidia
 def test_faithfulness_score_range():
     evaluator = FaithfulnessEvaluator()
     chunks = [
@@ -111,7 +103,7 @@ def test_faithfulness_score_range():
     assert isinstance(res, FaithfulnessResult)
     assert 0.0 <= res.faithfulness_score <= 1.0
 
-@openai_test
+@openai_or_nvidia
 def test_relevance_score_range():
     evaluator = RelevanceEvaluator()
     chunks = [
@@ -127,7 +119,7 @@ def test_relevance_score_range():
     assert isinstance(res, RelevanceResult)
     assert 0.0 <= res.relevance_score <= 1.0
 
-@openai_test
+@openai_or_nvidia
 def test_benchmark_hit_rate(conn):
     faith_eval = FaithfulnessEvaluator()
     rel_eval = RelevanceEvaluator()
@@ -137,7 +129,7 @@ def test_benchmark_hit_rate(conn):
     assert isinstance(report, BenchmarkReport)
     assert report.retrieval_hit_rate >= 0.6
 
-@openai_test
+@openai_or_nvidia
 def test_benchmark_intent_accuracy(conn):
     faith_eval = FaithfulnessEvaluator()
     rel_eval = RelevanceEvaluator()
@@ -146,7 +138,7 @@ def test_benchmark_intent_accuracy(conn):
     report = pipeline_eval.run_benchmark(BENCHMARK_TEST_CASES)
     assert report.intent_accuracy >= 0.75
 
-@openai_test
+@openai_or_nvidia
 def test_benchmark_avg_faithfulness(conn):
     faith_eval = FaithfulnessEvaluator()
     rel_eval = RelevanceEvaluator()

@@ -19,20 +19,20 @@ The diagram below represents the end-to-end data flow:
                   +-----------+-----------+
                               |
                               v
-                  +-----------+-----------+
-                  |       Embedder        | ===> [1536-dim dense vector]
-                  +-----------+-----------+
-                              |
-                              v
-               +--------------+--------------+
-               |      Hybrid Retriever       |
-               | (Dense Vector + Sparse BM25)|
-               +--------------+--------------+
-                              |
-                              v
-                  +-----------+-----------+
-                  |   Jaccard Reranker    | ===> [Re-ranked Top-K Chunks]
-                  +-----------+-----------+
+                   +-----------+-----------+
+                   |       Embedder        | ===> [dense vector]
+                   +-----------+-----------+
+                               |
+                               v
+                +--------------+--------------+
+                |      Hybrid Retriever       |
+                | (Dense Vector + Sparse BM25)|
+                +--------------+--------------+
+                               |
+                               v
+                   +-----------+-----------+
+                   |   Jaccard Reranker    | ===> [Re-ranked Top-K Chunks]
+                   +-----------+-----------+
                               |
                               v
                   +-----------+-----------+
@@ -63,12 +63,27 @@ pip install -r requirements.txt
 ```
 
 ### 2. Configure Environment Variables
-Create a `.env` file at the root of the project with the following configuration:
+Create a `.env` file at the root of the project. See `.env.example` for all options:
+
+**OpenAI (for submission):**
 ```env
-OPENAI_API_KEY=your-openai-api-key-here
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 DATABASE_URL=postgresql://postgres:password@localhost:5432/intellisupport
 EMBEDDING_MODEL=text-embedding-3-small
 GENERATION_MODEL=gpt-4o-mini
+CHUNK_SIZE=512
+CHUNK_OVERLAP=50
+HYBRID_ALPHA=0.7
+TOP_K=5
+```
+
+**NVIDIA (for development):**
+```env
+OPENAI_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
+DATABASE_URL=postgresql://postgres:password@localhost:5432/intellisupport
+EMBEDDING_MODEL=nvidia/nv-embedqa-e5-v5
+GENERATION_MODEL=meta/llama-3.1-8b-instruct
 CHUNK_SIZE=512
 CHUNK_OVERLAP=50
 HYBRID_ALPHA=0.7

@@ -6,7 +6,6 @@ from ingestion.loader import DocumentLoader, Document
 from ingestion.chunker import DocumentChunker, Chunk
 from ingestion.embedder import Embedder, EmbeddingError
 
-# Helper fixture for DB connection
 @pytest.fixture(scope="module")
 def conn():
     connection = psycopg2.connect(settings.database_url)
@@ -14,11 +13,16 @@ def conn():
     connection.rollback()
     connection.close()
 
-# Helper decorator to skip OpenAI calls if no key is configured
 openai_test = pytest.mark.skipif(
-    settings.openai_api_key in ("your-openai-api-key-here", "your-nvidia-api-key-here")
-    or not (settings.openai_api_key.startswith("sk-") or settings.openai_api_key.startswith("nvapi-")),
-    reason="Requires a valid OpenAI/NVIDIA API key"
+    settings.openai_api_key in ("your-openai-api-key-here",)
+    or not settings.openai_api_key.startswith("sk-"),
+    reason="Requires a valid OpenAI API key"
+)
+
+nvidia_test = pytest.mark.skipif(
+    settings.openai_api_key in ("your-nvidia-api-key-here",)
+    or not settings.openai_api_key.startswith("nvapi-"),
+    reason="Requires a valid NVIDIA API key"
 )
 
 def test_load_from_dict_valid():
@@ -76,11 +80,6 @@ def test_chunk_overlap():
         title="Test Doc Overlap",
         content="A B C D E F G H I J K L M N O"
     )
-    # chunk_size = 10, overlap = 3. 
-    # Chunk 0: A B C D E F G H I J (index 0 to 9)
-    # Chunk 1 starts at 10 - 3 = 7. 
-    # Chunk 1: H I J K L M N O (index 7 to 14)
-    # Overlap is H I J
     chunker = DocumentChunker(chunk_size=10, chunk_overlap=3)
     chunks = chunker.chunk_document(doc)
     
@@ -88,15 +87,21 @@ def test_chunk_overlap():
     assert chunks[0].content == "A B C D E F G H I J"
     assert chunks[1].content == "H I J K L M N O"
     
-    # Assert overlapping content is shared
     assert "H I J" in chunks[0].content
     assert chunks[1].content.startswith("H I J")
 
-@openai_test
+openai_or_nvidia = pytest.mark.skipif(
+    settings.openai_api_key in ("your-openai-api-key-here", "your-nvidia-api-key-here")
+    or not (settings.openai_api_key.startswith("sk-") or settings.openai_api_key.startswith("nvapi-")),
+    reason="Requires a valid OpenAI or NVIDIA API key"
+)
+
+@openai_or_nvidia
 def test_embed_text_shape():
     embedder = Embedder()
     embedding = embedder.embed_text("Sample support query")
     assert isinstance(embedding, list)
-    assert len(embedding) == 1024
+    expected_dims = 1024 if settings.openai_api_key.startswith("nvapi-") else 1536
+    assert len(embedding) == expected_dims
     for val in embedding:
         assert isinstance(val, float)

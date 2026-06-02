@@ -5,28 +5,27 @@ from generation.prompt_builder import PromptBuilder
 from generation.response_generator import ResponseGenerator, GeneratedResponse
 from retrieval.vector_store import RetrievedChunk
 
-# Decorator to skip tests if no API key is provided
-openai_test = pytest.mark.skipif(
+openai_or_nvidia = pytest.mark.skipif(
     settings.openai_api_key in ("your-openai-api-key-here", "your-nvidia-api-key-here")
     or not (settings.openai_api_key.startswith("sk-") or settings.openai_api_key.startswith("nvapi-")),
-    reason="Requires a valid OpenAI/NVIDIA API key"
+    reason="Requires a valid OpenAI or NVIDIA API key"
 )
 
-@openai_test
+@openai_or_nvidia
 def test_classify_billing_intent():
     classifier = IntentClassifier()
     res = classifier.classify("How do I upgrade my subscription plan?")
     assert res.intent == "billing"
     assert 0.0 <= res.confidence <= 1.0
 
-@openai_test
+@openai_or_nvidia
 def test_classify_technical_intent():
     classifier = IntentClassifier()
     res = classifier.classify("The app keeps crashing when I open a project")
     assert res.intent == "technical_issue"
     assert 0.0 <= res.confidence <= 1.0
 
-@openai_test
+@openai_or_nvidia
 def test_classify_confidence_range():
     classifier = IntentClassifier()
     res = classifier.classify("Hello there, how are you?")
@@ -73,7 +72,7 @@ def test_prompt_contains_chunk_ids():
     assert "chunk_doc_001_0" in user_msg_content
     assert "chunk_doc_002_5" in user_msg_content
 
-@openai_test
+@openai_or_nvidia
 def test_generate_response_fields():
     generator = ResponseGenerator(max_tokens=50)
     messages = [

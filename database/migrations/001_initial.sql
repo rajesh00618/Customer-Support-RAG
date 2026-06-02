@@ -1,8 +1,6 @@
--- Create schema and register vector extension if not present
 CREATE SCHEMA IF NOT EXISTS intellisupport;
 CREATE EXTENSION IF NOT EXISTS vector SCHEMA public;
 
--- Documents table
 CREATE TABLE IF NOT EXISTS intellisupport.documents (
     id SERIAL PRIMARY KEY,
     doc_id VARCHAR(64) UNIQUE NOT NULL,
@@ -14,7 +12,6 @@ CREATE TABLE IF NOT EXISTS intellisupport.documents (
     updated_at TIMESTAMP DEFAULT NOW()
 );
 
--- Chunks table
 CREATE TABLE IF NOT EXISTS intellisupport.chunks (
     id SERIAL PRIMARY KEY,
     chunk_id VARCHAR(64) UNIQUE NOT NULL,
@@ -22,12 +19,11 @@ CREATE TABLE IF NOT EXISTS intellisupport.chunks (
     content TEXT NOT NULL,
     chunk_index INTEGER NOT NULL,
     token_count INTEGER,
-    embedding VECTOR(1024),
+    embedding VECTOR(1536),
     metadata JSONB DEFAULT '{}',
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Queries table
 CREATE TABLE IF NOT EXISTS intellisupport.queries (
     id SERIAL PRIMARY KEY,
     query_id VARCHAR(64) UNIQUE NOT NULL,
@@ -37,7 +33,6 @@ CREATE TABLE IF NOT EXISTS intellisupport.queries (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Responses table
 CREATE TABLE IF NOT EXISTS intellisupport.responses (
     id SERIAL PRIMARY KEY,
     response_id VARCHAR(64) UNIQUE NOT NULL,
@@ -49,7 +44,6 @@ CREATE TABLE IF NOT EXISTS intellisupport.responses (
     created_at TIMESTAMP DEFAULT NOW()
 );
 
--- Feedback table
 CREATE TABLE IF NOT EXISTS intellisupport.feedback (
     id SERIAL PRIMARY KEY,
     feedback_id VARCHAR(64) UNIQUE NOT NULL,
