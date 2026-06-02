@@ -167,3 +167,9 @@ Running the Pipeline Evaluator benchmark on the specified `BENCHMARK_TEST_CASES`
 
 4. **Sliding Window Word-Tokenization Chunker**
    The chunker splits documents based on space tokenization, which is extremely lightweight and fast. It applies a sliding window step size of `chunk_size - chunk_overlap` words to preserve context overlap between consecutive chunks, preventing boundary information loss.
+
+---
+
+## Full Report
+
+See [`report.md`](report.md) for the complete A-to-Z project report including architecture details, database schema, component breakdown, benchmark results, known issues, design decisions, and submission checklist.
