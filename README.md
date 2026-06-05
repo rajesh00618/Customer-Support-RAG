@@ -121,33 +121,104 @@ print('Successfully seeded 10 documents and stored their embeddings.')
 "
 ```
 
-## Running the API
+## Running the Application
 
-To start the FastAPI REST server locally, run:
+### Option 1: Docker (recommended)
+
+Start PostgreSQL with pgvector and the API server:
+
 ```bash
-uvicorn api.main:app --host 127.0.0.1 --port 8000 --reload
+docker compose up -d
 ```
 
-### API Endpoints
-- **`POST /query`**: Submits a user query, runs intent classification and hybrid retrieval, generates a grounded response, and saves the records.
-- **`POST /evaluate/{response_id}`**: Runs LLM-as-a-judge faithfulness and relevance checks on the generated response.
-- **`POST /feedback`**: Submits a user rating (1-5) and comment.
-- **`GET /feedback/summary/{response_id}`**: Fetches average rating and count of feedbacks for a response.
-- **`GET /health`**: Verifies database connectivity and lists the total number of indexed document chunks.
+This starts:
+- **PostgreSQL + pgvector** on port `5433`
+- **FastAPI backend** on port `8001`
+
+Then seed the database with documents and embeddings:
+
+```bash
+docker exec intelli-api-1 python -c "
+import psycopg2
+from config import settings
+from ingestion.seed_data import SEED_DOCUMENTS
+from ingestion.loader import DocumentLoader
+from ingestion.chunker import DocumentChunker
+from ingestion.embedder import Embedder
+
+conn = psycopg2.connect(settings.database_url)
+docs = DocumentLoader.load_batch(SEED_DOCUMENTS)
+DocumentLoader.save_to_db(docs, conn)
+chunker = DocumentChunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+chunks = chunker.chunk_batch(docs)
+embedder = Embedder()
+embedder.embed_and_store_chunks(chunks, conn)
+conn.close()
+print('Seeding complete!')
+"
+```
+
+Verify the API is healthy:
+
+```bash
+curl http://localhost:8001/health
+```
+
+### Option 2: Run Locally
+
+Start PostgreSQL with pgvector:
+
+```bash
+docker run -d --name intelli-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=intellisupport -p 5432:5432 pgvector/pgvector:pg16
+```
+
+Run the database migration:
+
+```bash
+docker exec -i intelli-db psql -U postgres -d intellisupport < database/migrations/001_initial.sql
+```
+
+Start the FastAPI REST server:
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+### Streamlit Frontend
+
+To launch the chat UI:
+
+```bash
+streamlit run app.py --server.port 8501
+```
+
+Then open **http://localhost:8501** in your browser.
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/query` | Submit a query — classifies intent, retrieves docs, generates response |
+| POST | `/evaluate/{response_id}` | LLM-as-a-judge faithfulness and relevance check |
+| POST | `/feedback` | Store user rating (1-5) with optional comment |
+| GET | `/feedback/summary/{response_id}` | Average rating and feedback count |
+| GET | `/health` | Database connectivity and chunk count |
 
 ## Running Tests
 
 To run the complete pytest test suite:
+
 ```bash
 pytest -v
 ```
-*(Tests requiring a live OpenAI connection are decorated to automatically skip if `OPENAI_API_KEY` is not configured, enabling offline testing of the database schema and hybrid search logic).*
+
+*(Tests requiring a live OpenAI/NVIDIA connection are decorated to automatically skip if `OPENAI_API_KEY` is not configured, enabling offline testing of the database schema and hybrid search logic).*
 
 ## Evaluation Results
 
 Running the Pipeline Evaluator benchmark on the specified `BENCHMARK_TEST_CASES` yields the following performance metrics:
 
-| Metric | Your Score | Threshold |
+| Metric | Score | Threshold |
 | :--- | :--- | :--- |
 | **Retrieval Hit Rate** | 1.00 | >= 0.60 |
 | **Intent Accuracy** | 0.88 | >= 0.75 |
@@ -168,8 +239,4 @@ Running the Pipeline Evaluator benchmark on the specified `BENCHMARK_TEST_CASES`
 4. **Sliding Window Word-Tokenization Chunker**
    The chunker splits documents based on space tokenization, which is extremely lightweight and fast. It applies a sliding window step size of `chunk_size - chunk_overlap` words to preserve context overlap between consecutive chunks, preventing boundary information loss.
 
----
 
-## Full Report
-
-See [`report.md`](report.md) for the complete A-to-Z project report including architecture details, database schema, component breakdown, benchmark results, known issues, design decisions, and submission checklist.
