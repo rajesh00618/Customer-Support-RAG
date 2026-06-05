@@ -1,0 +1,39 @@
+=== Billing ===
+How do I upgrade my subscription plan?
+What happens if I cancel my subscription?
+What billing plans are available?
+Do you offer refunds?
+How is billing calculated?
+
+=== Account & Security ===
+How do I enable two-factor authentication?
+How do I add a new member to my team?
+I forgot my password and can't log in
+How do I change someone's permissions?
+What are the different user roles?
+
+=== Integrations ===
+How do I connect Nexora to Slack?
+Can I integrate with GitHub?
+How do I set up the Jira integration?
+
+=== Data & Export ===
+How do I export my project data as CSV?
+How do I backup my workspace?
+How do I restore deleted items from trash?
+
+=== Troubleshooting ===
+The webhook I set up isn't receiving any events
+I'm getting a 429 rate limit error
+The app keeps crashing when I open a project
+
+=== Features & Templates ===
+Can I use custom templates for new projects?
+How do I set up automations?
+Can I customize task statuses?
+
+=== General ===
+How do I get started with Nexora?
+How do I create a project?
+How do I invite team members?
+How do I generate an API key?
