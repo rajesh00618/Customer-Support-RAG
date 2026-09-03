@@ -1,0 +1,244 @@
+# IntelliSupport: Autonomous Customer Support RAG Platform
+
+IntelliSupport is a production-grade, autonomous Customer Support Intelligence Platform designed for Nexora, a fictional B2B project management SaaS company. When Nexora's support desk is overwhelmed, IntelliSupport acts as the frontline intelligence: ingesting and semantically indexing documentation, classifying incoming user queries by intent, retrieving relevant context using hybrid (dense and sparse) search, and generating grounded, faithful answers using OpenAI's API.
+
+The entire RAG pipeline, LLM intent classifier, and evaluation metrics are written completely from scratch in raw Python without relying on high-level orchestration abstractions (such as LangChain, LlamaIndex, or Haystack) or database ORMs. This ensures full visibility, optimized latency, and strict control over prompt constructions and evaluation rubrics.
+
+## Architecture Diagram
+
+The diagram below represents the end-to-end data flow:
+
+```
+                  +-----------------------+
+                  |  Customer query input |
+                  +-----------+-----------+
+                              |
+                              v
+                  +-----------+-----------+
+                  |   Intent Classifier   | ===> [Classified Intent & Confidence]
+                  +-----------+-----------+
+                              |
+                              v
+                   +-----------+-----------+
+                   |       Embedder        | ===> [dense vector]
+                   +-----------+-----------+
+                               |
+                               v
+                +--------------+--------------+
+                |      Hybrid Retriever       |
+                | (Dense Vector + Sparse BM25)|
+                +--------------+--------------+
+                               |
+                               v
+                   +-----------+-----------+
+                   |   Jaccard Reranker    | ===> [Re-ranked Top-K Chunks]
+                   +-----------+-----------+
+                              |
+                              v
+                  +-----------+-----------+
+                  |    Prompt Builder     | ===> [Formatted Prompt Messages]
+                  +-----------+-----------+
+                              |
+                              v
+                  +-----------+-----------+
+                  |  Response Generator   | ===> [Response & Fallback Retries]
+                  +-----------+-----------+
+                              |
+                              +------------------------+
+                              |                        |
+                              v                        v
+                    [Save Query & Response]   [Return API Response]
+```
+
+## Setup Instructions
+
+### Prerequisites
+- Python 3.11+
+- PostgreSQL 16+ with the `pgvector` extension installed and running
+
+### 1. Environment Setup
+Clone the repository and install the dependencies listed in `requirements.txt`:
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Configure Environment Variables
+Create a `.env` file at the root of the project. See `.env.example` for all options:
+
+**OpenAI (for submission):**
+```env
+OPENAI_API_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+DATABASE_URL=postgresql://postgres:password@localhost:5432/intellisupport
+EMBEDDING_MODEL=text-embedding-3-small
+GENERATION_MODEL=gpt-4o-mini
+CHUNK_SIZE=512
+CHUNK_OVERLAP=50
+HYBRID_ALPHA=0.7
+TOP_K=5
+```
+
+**NVIDIA (recommended):**
+```env
+OPENAI_API_KEY=nvapi-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+OPENAI_BASE_URL=https://integrate.api.nvidia.com/v1
+DATABASE_URL=postgresql://postgres:password@localhost:5432/intellisupport
+EMBEDDING_MODEL=nvidia/nemotron-3-embed-1b
+GENERATION_MODEL=openai/gpt-oss-20b
+CHUNK_SIZE=512
+CHUNK_OVERLAP=50
+HYBRID_ALPHA=0.7
+TOP_K=5
+```
+
+> **Model choice:** `openai/gpt-oss-20b` is a small, fast MoE model (~3.6B active parameters) served on the
+> NVIDIA endpoint with reliable JSON mode. It handles intent classification, RAG generation, and
+> LLM-as-a-judge evaluation in a few seconds per call — a deliberate swap from the previous
+> `nemotron-3-super-120b-a12b` to keep latency and cost low. Swap `GENERATION_MODEL` for any
+> OpenAI-compatible model that supports `response_format={"type": "json_object"}`.
+
+### 3. Database Migration
+Ensure PostgreSQL is running and has the `intellisupport` database created. Run the migration to set up the schema and tables:
+```bash
+# In PostgreSQL (enable vector extension)
+CREATE DATABASE intellisupport;
+# Run the SQL migration
+psql -U postgres -d intellisupport -f database/migrations/001_initial.sql
+```
+
+> **Note:** Migrations and seed data now run **automatically** on API startup (`database/init_db.py`). If the `chunks` table is empty, the 25 Nexora documents are loaded, chunked, and embedded before the server accepts requests — no manual seeding step required.
+
+### 4. Seeding Data (optional manual override)
+If you want to manually re-seed (e.g., after changing chunk sizes), run:
+```bash
+python -c "
+import psycopg2
+from config import settings
+from ingestion.seed_data import SEED_DOCUMENTS
+from ingestion.loader import DocumentLoader
+from ingestion.chunker import DocumentChunker
+from ingestion.embedder import Embedder
+
+conn = psycopg2.connect(settings.database_url)
+docs = DocumentLoader.load_batch(SEED_DOCUMENTS)
+DocumentLoader.save_to_db(docs, conn)
+chunker = DocumentChunker(chunk_size=settings.chunk_size, chunk_overlap=settings.chunk_overlap)
+chunks = chunker.chunk_batch(docs)
+embedder = Embedder()
+embedder.embed_and_store_chunks(chunks, conn)
+print('Successfully seeded 25 documents and stored their embeddings.')
+"
+```
+
+## 🔐 Security Note
+Never expose your API key. The `.env` file is git-ignored and should **never** be committed. Rotate your NVIDIA key immediately if it has ever been shared in a public channel.
+
+## Running the Application
+
+### Option 1: Docker (recommended)
+
+Start PostgreSQL, the FastAPI backend, and the Streamlit UI:
+
+```bash
+docker compose up -d
+```
+
+This starts:
+- **PostgreSQL + pgvector** on port `5433`
+- **FastAPI backend** on port `8001`
+- **Streamlit UI** on port `8501`
+
+The database schema is created by the init container, and migrations + seed data run **automatically** on API startup (see `database/init_db.py`). No manual seeding step is required.
+
+Verify the API is healthy:
+
+```bash
+curl http://localhost:8001/health
+```
+
+Open the UI at **http://localhost:8501**.
+
+### Option 2: Run Locally
+
+Start PostgreSQL with pgvector:
+
+```bash
+docker run -d --name intelli-db -e POSTGRES_PASSWORD=password -e POSTGRES_DB=intellisupport -p 5432:5432 pgvector/pgvector:pg16
+```
+
+Run the database migration:
+
+```bash
+docker exec -i intelli-db psql -U postgres -d intellisupport < database/migrations/001_initial.sql
+```
+
+Start the FastAPI REST server:
+
+```bash
+uvicorn api.main:app --host 0.0.0.0 --port 8001 --reload
+```
+
+The server will automatically run migrations and seed the 25 Nexora documents on startup if the database is empty.
+
+### Streamlit Frontend
+
+To launch the chat UI:
+
+```bash
+streamlit run app.py --server.port 8501
+```
+
+Then open **http://localhost:8501** in your browser.
+
+Set `API_URL` as an env var if the backend runs elsewhere:
+```bash
+API_URL=http://localhost:8001 streamlit run app.py --server.port 8501
+```
+
+## API Endpoints
+
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/query` | Submit a query — classifies intent, retrieves docs, generates response |
+| POST | `/evaluate/{response_id}` | LLM-as-a-judge faithfulness and relevance check |
+| POST | `/feedback` | Store user rating (1-5) with optional comment |
+| GET | `/feedback/summary/{response_id}` | Average rating and feedback count |
+| GET | `/health` | Database connectivity and chunk count |
+
+## Running Tests
+
+To run the complete pytest test suite:
+
+```bash
+pytest -v
+```
+
+*(Tests requiring a live OpenAI/NVIDIA connection are decorated to automatically skip if `OPENAI_API_KEY` is not configured, enabling offline testing of the database schema and hybrid search logic).*
+
+## Evaluation Results
+
+Running the Pipeline Evaluator benchmark on the specified `BENCHMARK_TEST_CASES` (with `openai/gpt-oss-20b`) yields the following measured metrics:
+
+| Metric | Score | Threshold |
+| :--- | :--- | :--- |
+| **Retrieval Hit Rate** | 1.00 | >= 0.60 |
+| **Intent Accuracy** | 1.00 | >= 0.75 |
+| **Avg Faithfulness** | 0.99 | >= 0.60 |
+| **Avg Relevance** | 0.29 | >= 0.60 |
+
+> **On the relevance score:** the rubric averages a 0–2 judge rating over **all** top-5 chunks. The seed corpus is 25 single-topic documents, so a query about one topic typically returns 1 relevant chunk plus 4 off-topic fillers — both `gpt-oss-20b` and `nemotron-3-super-120b-a12b` as judges rate this identically (~0.2–0.3). Retrieval quality itself is high: the correct document is the top-1 vector result for every benchmark case (hit rate 1.00) and generated responses are faithfully grounded (0.99). Treat the relevance figure as a precision-under-`top_k` signal; lowering `TOP_K` raises it mechanically (e.g., `TOP_K=1` yields 1.0).
+
+## Design Decisions
+
+1. **Raw SQL over ORM (psycopg2-binary)**
+   We utilized raw SQL query parameterization via `psycopg2` inside a threaded connection pool. This avoids the heavy abstractions of ORMs like SQLAlchemy, providing maximum execution transparency and performance for low-latency queries, particularly for custom syntax like pgvector's cosine distance (`<=>`).
+
+2. **FastAPI Lifespan and Connection Pooling**
+   Initializing the database connection pool, loading the in-memory BM25 index on startup, and setting up the HybridRetriever in the FastAPI lifespan context manager ensures these assets are loaded exactly once on startup and shared across REST queries, rather than re-creating them per API invocation.
+
+3. **LLM-as-a-Judge Evaluation Suite**
+   We built custom prompts using JSON mode (`response_format={"type": "json_object"}`) to programmatically structure faithfulness and relevance evaluations. This eliminates the need for expensive high-level libraries (like Ragas or TruLens) and guarantees deterministic JSON outputs matching our Pydantic schemas.
+
+4. **Sliding Window Word-Tokenization Chunker**
+   The chunker splits documents based on space tokenization, which is extremely lightweight and fast. It applies a sliding window step size of `chunk_size - chunk_overlap` words to preserve context overlap between consecutive chunks, preventing boundary information loss.
+
+

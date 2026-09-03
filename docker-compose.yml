@@ -1,0 +1,52 @@
+version: "3.9"
+
+services:
+  db:
+    image: pgvector/pgvector:pg16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: intellisupport
+    ports:
+      - "5433:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/migrations/001_initial.sql:/docker-entrypoint-initdb.d/001_initial.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build: .
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8001:8000"
+    environment:
+      DATABASE_URL: postgresql://postgres:password@db:5432/intellisupport
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      EMBEDDING_MODEL: ${EMBEDDING_MODEL:-nvidia/nemotron-3-embed-1b}
+      GENERATION_MODEL: ${GENERATION_MODEL:-openai/gpt-oss-20b}
+      CHUNK_SIZE: ${CHUNK_SIZE:-512}
+      CHUNK_OVERLAP: ${CHUNK_OVERLAP:-50}
+      HYBRID_ALPHA: ${HYBRID_ALPHA:-0.7}
+      TOP_K: ${TOP_K:-5}
+    env_file:
+      - .env
+
+  ui:
+    build: .
+    command: streamlit run app.py --server.port 8501 --server.address 0.0.0.0
+    depends_on:
+      - api
+    ports:
+      - "8501:8501"
+    environment:
+      API_URL: http://api:8000
+
+volumes:
+  pgdata:
